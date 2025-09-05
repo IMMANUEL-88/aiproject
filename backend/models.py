@@ -2,7 +2,6 @@
 from sqlalchemy import Column, Integer, String, JSON
 from database import Base
 
-# Renamed from Workflow to Stack to match the Figma designs
 class Stack(Base):
     __tablename__ = "stacks"
     id = Column(Integer, primary_key=True, index=True)
@@ -10,7 +9,6 @@ class Stack(Base):
     description = Column(String, nullable=True)
     graph = Column(JSON) # Stores the React Flow JSON
 
-# You can keep your Document model as is
 class Document(Base):
     __tablename__ = "documents"
     id = Column(Integer, primary_key=True, index=True)

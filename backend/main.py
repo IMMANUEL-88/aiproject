@@ -1,4 +1,3 @@
-# backend/main.py
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -14,14 +13,18 @@ from sqlalchemy.orm import Session
 import models 
 import database
 
-# --- Initialization ---
+# ----------------------------------------------------------
+# Environment & App Initialization
+# ----------------------------------------------------------
 load_dotenv()
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 app = FastAPI()
 
-# --- CORS Middleware ---
+# ----------------------------------------------------------
+# Middleware Configuration
+# ----------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[FRONTEND_URL, "http://localhost:3000"],
@@ -30,17 +33,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Configure APIs ---
+# ----------------------------------------------------------
+# External Service Configuration
+# ----------------------------------------------------------
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# --- Initialize ChromaDB client ---
+# Initialize ChromaDB client
 client = chromadb.PersistentClient(path="./chroma_db")
 
-# # --- Pydantic Models ---
-# class WorkflowExecutionRequest(BaseModel):
-#     query: str
-#     graph: Dict[str, Any]
-    
+# ----------------------------------------------------------
+# Utility Functions
+# ----------------------------------------------------------
 def perform_web_search(query: str, api_key: str) -> str:
     """Performs a web search using SerpApi and returns a snippet."""
     if not api_key:
@@ -50,7 +53,6 @@ def perform_web_search(query: str, api_key: str) -> str:
         search = GoogleSearch(params)
         results = search.get_dict()
         
-        # Extract the most relevant snippet
         if "answer_box" in results and "snippet" in results["answer_box"]:
             return results["answer_box"]["snippet"]
         elif "organic_results" in results and results["organic_results"]:
@@ -60,12 +62,10 @@ def perform_web_search(query: str, api_key: str) -> str:
         print(f"Error during SerpApi search: {e}")
         return "There was an error performing the web search."
 
+
 def get_embedding(text: str, task_type: str):
     """Generates an embedding using the Gemini API."""
     try:
-        # Gemini embedding models require a task_type
-        # "retrieval_document" for documents to be stored
-        # "retrieval_query" for the user's query
         result = genai.embed_content(
             model="models/text-embedding-004",
             content=text,
@@ -76,8 +76,14 @@ def get_embedding(text: str, task_type: str):
         print(f"Error creating Gemini embedding: {e}")
         return None
 
+# ----------------------------------------------------------
+# Database Setup
+# ----------------------------------------------------------
 models.Base.metadata.create_all(bind=database.engine)
 
+# ----------------------------------------------------------
+# Pydantic Models
+# ----------------------------------------------------------
 class StackBase(BaseModel):
     name: str
     description: str | None = None
@@ -116,7 +122,9 @@ def get_db():
     finally:
         db.close()
 
-# --- STACK API ENDPOINTS ---
+# ==========================================================
+# STACK API ENDPOINTS
+# ==========================================================
 @app.post("/api/stacks", response_model=StackInDB)
 def create_stack(stack: StackCreate, db: Session = Depends(get_db)):
     db_stack = models.Stack(name=stack.name, description=stack.description, graph={"nodes": [], "edges": []})
@@ -147,19 +155,15 @@ def update_stack(stack_id: int, stack_update: StackUpdate, db: Session = Depends
     db.refresh(db_stack)
     return db_stack
 
-# --- NEW DIRECT GEMINI CHAT ENDPOINT ---
+# ==========================================================
+# GEMINI CHAT ENDPOINTS
+# ==========================================================
 @app.post("/api/chat/gemini")
 async def chat_with_gemini(request: ChatRequest):
-    """
-    Handles a direct chat query with the Gemini API.
-    """
+    """Handles a direct chat query with the Gemini API."""
     try:
-        # Configure the model
         model = genai.GenerativeModel('gemini-2.5-flash')
-
-        # Generate content
         response = model.generate_content(request.query)
-
         return {"answer": response.text}
     except Exception as e:
         print(f"Error calling Gemini API: {e}")
@@ -168,36 +172,32 @@ async def chat_with_gemini(request: ChatRequest):
     
 @app.post("/api/chat/rag")
 async def rag_chat(request: RagChatRequest):
-    """
-    Handles a chat query using a specific document as context (RAG).
-    """
+    """Handles a chat query using a specific document as context (RAG)."""
     query = request.query
     doc_id = request.doc_id
     context = ""
 
-    # 1. Retrieve context from the specified document in ChromaDB
+    # Retrieve context from ChromaDB
     try:
         collection = client.get_collection(name=f"doc_{doc_id}")
         query_embedding = get_embedding(query, task_type="retrieval_query")
         
         if query_embedding:
-            results = collection.query(
-                query_embeddings=[query_embedding],
-                n_results=3
-            )
+            results = collection.query(query_embeddings=[query_embedding], n_results=3)
             context = "\n".join(results['documents'][0])
             print(f"Retrieved context for RAG chat from doc_id {doc_id}")
     except Exception as e:
         print(f"Error querying ChromaDB for RAG chat: {e}")
-        # We don't raise an error, just proceed with empty context
         context = "Could not retrieve context from the document."
 
-    # 2. Construct a strict prompt for the LLM
-    prompt_template = "You are an assistant that answers questions based ONLY on the provided context. If the information to answer the question is not in the context, you must say, 'I am sorry, but I cannot answer that question based on the provided document.' Do not use any outside knowledge.\n\nContext:\n{context}\n\nQuestion:\n{query}"
+    # Prompt Template
+    prompt_template = (
+        "You are an assistant that answers questions based ONLY on the provided context.If the information to answer the question is not in the context, you must say,'I am sorry, but I cannot answer that question based on the provided document.' Do not use any outside knowledge.\n\nContext:\n{context}\n\nQuestion:\n{query}"
+    )
     
     final_prompt = prompt_template.format(query=query, context=context)
 
-    # 3. Call the Gemini API
+    # Call Gemini API
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content(final_prompt)
@@ -209,7 +209,9 @@ async def rag_chat(request: RagChatRequest):
     return {"answer": llm_response}
     
 
-# --- CORE API ENDPOINTS ---
+# ==========================================================
+# DOCUMENT UPLOAD API
+# ==========================================================
 @app.post("/api/documents/upload")
 async def upload_document(file: UploadFile = File(...)):
     if file.content_type != "application/pdf":
@@ -223,16 +225,12 @@ async def upload_document(file: UploadFile = File(...)):
     texts = [page.get_text() for page in doc]
     ids = [f"page_{i}" for i in range(len(texts))]
 
-    # --- UPDATED TO USE GEMINI EMBEDDINGS ---
-    # We use "retrieval_document" as the task_type for the document chunks
     embeddings = [get_embedding(text, task_type="retrieval_document") for text in texts]
 
-    # Filter out any failed embeddings
     valid_embeddings = [(emb, doc, doc_id) for emb, doc, doc_id in zip(embeddings, texts, ids) if emb is not None]
     if not valid_embeddings:
         raise HTTPException(status_code=500, detail="Failed to create any embeddings for the document.")
 
-    # Unzip the valid data
     final_embeddings, final_texts, final_ids = zip(*valid_embeddings)
 
     collection.add(
@@ -242,11 +240,9 @@ async def upload_document(file: UploadFile = File(...)):
     )
     return {"doc_id": doc_id, "filename": file.filename, "pages": len(texts)}
 
-    
-# backend/main.py
-
-# backend/main.py
-
+# ==========================================================
+# WORKFLOW EXECUTION API
+# ==========================================================
 @app.post("/api/workflow/run")
 async def run_workflow(request: RunWorkflowRequest):
     graph = request.graph
@@ -255,6 +251,7 @@ async def run_workflow(request: RunWorkflowRequest):
     
     node_outputs = {}
 
+    # Step 1: Extract User Input
     user_input_node = next((node for node in nodes.values() if node['type'] == 'userInput'), None)
     if not user_input_node or 'query' not in user_input_node['data']:
         raise HTTPException(status_code=400, detail="User Input node with a query is required.")
@@ -262,6 +259,7 @@ async def run_workflow(request: RunWorkflowRequest):
     initial_query = user_input_node['data']['query']
     node_outputs[user_input_node['id']] = initial_query
 
+    # Step 2: Identify LLM Node
     llm_node = next((node for node in nodes.values() if node['type'] == 'llmGemini'), None)
     if not llm_node:
         raise HTTPException(status_code=400, detail="An LLM (Gemini) node is required.")
@@ -270,6 +268,7 @@ async def run_workflow(request: RunWorkflowRequest):
     context_for_llm = ""
     web_search_results = ""
 
+    # Step 3: Process Edges for Context & Query
     for edge in edges:
         if edge['target'] == llm_node['id']:
             source_node = nodes[edge['source']]
@@ -286,26 +285,22 @@ async def run_workflow(request: RunWorkflowRequest):
                         
                         if query_embedding:
                             results = collection.query(query_embeddings=[query_embedding], n_results=3)
-                            
-                            # --- THIS IS THE FIX ---
-                            # These two lines are now correctly indented inside the 'if' block
                             context_for_llm = "\n".join(results['documents'][0])
                             node_outputs[source_node['id']] = context_for_llm
-                            # --- END OF FIX ---
-
                     except Exception as e:
                         print(f"Error processing Knowledge Base: {e}")
                         context_for_llm = ""
 
+    # Step 4: Perform Web Search if Enabled
     llm_config = llm_node['data']
-    
     if llm_config.get('websearchEnabled'):
         serp_api_key = llm_config.get('serpApiKey', os.getenv("SERPAPI_API_KEY"))
         web_search_results = perform_web_search(query=initial_query, api_key=serp_api_key)
     
+    # Step 5: Build Final Prompt
     prompt_template = llm_config.get(
         'prompt', 
-        "You are an assistant. Use the provided context and web search results to answer the question. If the information is not in the context or search results, say you don't know.\n\nContext:\n{context}\n\nWeb Search Results:\n{web_search_results}\n\nQuestion:\n{query}"
+        "You are an assistant. Use the provided context and web search results to answer the question.If the information is not in the context or search results, say you don't know.\n\n Context:\n{context}\n\nWeb Search Results:\n{web_search_results}\n\nQuestion:\n{query}"
     )
     
     final_prompt = prompt_template.format(
@@ -314,6 +309,7 @@ async def run_workflow(request: RunWorkflowRequest):
         web_search_results=web_search_results
     )
 
+    # Step 6: Call Gemini API
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content(final_prompt)
@@ -323,4 +319,3 @@ async def run_workflow(request: RunWorkflowRequest):
         raise HTTPException(status_code=500, detail="Failed to get response from Gemini API for chat completion.")   
     
     return {"answer": llm_response}
-    
