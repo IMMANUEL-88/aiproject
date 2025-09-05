@@ -32,6 +32,7 @@ app.add_middleware(
 )
 
 # --- Configure APIs ---
+openai.api_key = os.getenv("OPENAI_API_KEY")
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 client_openai = openai.OpenAI()
