@@ -5,7 +5,7 @@ services:
     image: postgres:13
     container_name: workflow_db
     environment:
-      POSTGRES_USER: user
+      POSTGRES_USER: workflow_user
       POSTGRES_PASSWORD: password
       POSTGRES_DB: workflow_db
     ports:

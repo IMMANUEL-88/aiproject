@@ -7,7 +7,6 @@ import os
 import uuid
 import chromadb
 import pymupdf
-import openai
 import google.generativeai as genai
 from serpapi import GoogleSearch # <-- CORRECTED IMPORT (REVERTED)
 from dotenv import load_dotenv
@@ -32,18 +31,15 @@ app.add_middleware(
 )
 
 # --- Configure APIs ---
-openai.api_key = os.getenv("OPENAI_API_KEY")
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
-client_openai = openai.OpenAI()
 
 # --- Initialize ChromaDB client ---
 client = chromadb.PersistentClient(path="./chroma_db")
 
-# --- Pydantic Models ---
-class WorkflowExecutionRequest(BaseModel):
-    query: str
-    graph: Dict[str, Any]
+# # --- Pydantic Models ---
+# class WorkflowExecutionRequest(BaseModel):
+#     query: str
+#     graph: Dict[str, Any]
     
 def perform_web_search(query: str, api_key: str) -> str:
     """Performs a web search using SerpApi and returns a snippet."""
