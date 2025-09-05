@@ -74,3 +74,4 @@ This is the final step. With Docker Desktop open and running, go back to your te
 ```bash
 docker-compose up
 ```
+The first build will take a lot of time based on your internet connection. Be Patient :)
