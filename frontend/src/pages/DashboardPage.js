@@ -20,6 +20,9 @@ import AddIcon from "@mui/icons-material/Add";
 import LaunchIcon from "@mui/icons-material/Launch";
 import myLogo from "../assets/my-logo.png";
 
+/* ========================================================================
+   STYLES
+   ======================================================================== */
 const modalStyle = {
   position: "absolute",
   top: "50%",
@@ -32,35 +35,55 @@ const modalStyle = {
   borderRadius: 2,
 };
 
+/* ========================================================================
+   DASHBOARD PAGE COMPONENT
+   ======================================================================== */
 const DashboardPage = () => {
+  /* ------------------------------------------------------------------------
+     STATE & HOOKS
+     ------------------------------------------------------------------------ */
   const [stacks, setStacks] = useState([]);
   const [open, setOpen] = useState(false);
   const [newStackName, setNewStackName] = useState("");
   const [newStackDesc, setNewStackDesc] = useState("");
   const navigate = useNavigate();
 
+  /* ------------------------------------------------------------------------
+     EFFECTS
+     ------------------------------------------------------------------------ */
   useEffect(() => {
     fetchStacks();
   }, []);
 
+  /* ------------------------------------------------------------------------
+     API CALLS
+     ------------------------------------------------------------------------ */
   const fetchStacks = async () => {
     try {
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/stacks`);
+      const response = await axios.get(
+        `${process.env.REACT_APP_API_URL}/api/stacks`
+      );
       setStacks(response.data);
     } catch (error) {
       console.error("Failed to fetch stacks:", error);
     }
   };
 
+  /* ------------------------------------------------------------------------
+     EVENT HANDLERS
+     ------------------------------------------------------------------------ */
   const handleOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);
 
   const handleCreateStack = async () => {
     try {
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/stacks`, {
-        name: newStackName,
-        description: newStackDesc,
-      });
+      const response = await axios.post(
+        `${process.env.REACT_APP_API_URL}/api/stacks`,
+        {
+          name: newStackName,
+          description: newStackDesc,
+        }
+      );
       handleClose();
       navigate(`/stack/${response.data.id}`);
     } catch (error) {
@@ -68,10 +91,13 @@ const DashboardPage = () => {
     }
   };
 
+  /* ------------------------------------------------------------------------
+     RENDER
+     ------------------------------------------------------------------------ */
   return (
     <>
+      {/* ======================= HEADER ======================= */}
       <AppBar position="static" color="default" elevation={1}>
-        {/* FIX 1: The Container centers the header content */}
         <Container sx={{ maxWidth: "1800px !important" }}>
           <Toolbar disableGutters>
             <img
@@ -91,8 +117,9 @@ const DashboardPage = () => {
         </Container>
       </AppBar>
 
+      {/* ======================= MAIN CONTENT ======================= */}
       <Container sx={{ mt: 4, maxWidth: "1800px !important" }}>
-        {/* FIX 2 & 3: This content will now align perfectly under the header */}
+        {/* ---- Page Title & Actions ---- */}
         <Box
           sx={{
             display: "flex",
@@ -109,27 +136,25 @@ const DashboardPage = () => {
             startIcon={<AddIcon />}
             onClick={handleOpen}
             sx={{
-              borderRadius: "8px", // pill style
-              px: 3, // optional: wider button padding
-              py: 1.2, // optional: taller button padding
+              borderRadius: "8px",
+              px: 3,
+              py: 1.2,
             }}
           >
             New Stack
           </Button>
         </Box>
 
+        {/* ---- Stacks Grid ---- */}
         {stacks.length > 0 ? (
-          // This Box is now a CSS Grid container
           <Box
             sx={{
               display: "grid",
-              // This is the key: it creates responsive columns
               gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-              gap: 3, // Sets the space between cards
+              gap: 3,
             }}
           >
             {stacks.map((stack) => (
-              // The Card is now the grid item. No extra Box wrapper is needed.
               <Card
                 key={stack.id}
                 sx={{
@@ -169,19 +194,22 @@ const DashboardPage = () => {
             ))}
           </Box>
         ) : (
-          // Empty State
+          /* ---- Empty State ---- */
           <Paper
             variant="outlined"
             sx={{
               mt: 10,
               p: 4,
               textAlign: "start",
-              // --- ADD THESE TWO LINES ---
-              maxWidth: "400px", // Sets a maximum width for the container
+              maxWidth: "400px",
               mx: "auto",
             }}
           >
-            <Typography variant="h5" component="h2" sx={{ mb: 1, fontWeight: 600 }}>
+            <Typography
+              variant="h5"
+              component="h2"
+              sx={{ mb: 1, fontWeight: 600 }}
+            >
               Create New Stack
             </Typography>
             <Typography color="text.secondary" sx={{ mb: 2 }}>
@@ -203,7 +231,7 @@ const DashboardPage = () => {
           </Paper>
         )}
 
-        {/* Create New Stack Modal */}
+        {/* ======================= CREATE STACK MODAL ======================= */}
         <Modal open={open} onClose={handleClose}>
           <Box sx={modalStyle}>
             <Typography variant="h6" component="h2" sx={{ mb: 2 }}>

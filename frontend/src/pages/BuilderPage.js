@@ -1,4 +1,9 @@
+// ============================================================================
 // frontend/src/pages/BuilderPage.js
+// Main page for the visual workflow builder with drag-and-drop nodes, 
+// workflow execution, stack chat (RAG), and Gemini chat.
+// ============================================================================
+
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -31,7 +36,7 @@ import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import { useSnackbar } from "notistack";
 import { v4 as uuidv4 } from "uuid";
 
-// --- Component Imports ---
+// --- Custom Component Imports ---
 import Sidebar from "../components/Sidebar";
 import BuilderHeader from "../components/Header";
 import StackChatModal from "../components/StackChatModal";
@@ -43,6 +48,9 @@ import {
   OutputNode,
 } from "../components/CustomNodes";
 
+// ============================================================================
+// Node Configuration
+// ============================================================================
 const nodeTypes = {
   userInput: UserInputNode,
   knowledgeBase: KnowledgeBaseNode,
@@ -53,8 +61,9 @@ const nodeTypes = {
 let id = 1;
 const getId = () => `node_${id++}`;
 
-// frontend/src/pages/BuilderPage.js
-
+// ============================================================================
+// Custom Controls (Zoom + Fullscreen Toggle)
+// ============================================================================
 const CustomControls = ({ onToggleFullscreen, isFullscreen }) => {
   const { zoomIn, zoomOut } = useReactFlow();
   const { zoom } = useViewport();
@@ -92,29 +101,35 @@ const CustomControls = ({ onToggleFullscreen, isFullscreen }) => {
   );
 };
 
+// ============================================================================
+// Flow Logic Component (handles auto-fit on fullscreen toggle)
+// ============================================================================
 const FlowLogic = ({ isFullscreen }) => {
   const { fitView } = useReactFlow();
 
-  // This effect now lives in a component that is a child of ReactFlowProvider
   useEffect(() => {
-    // We add a short delay to allow the layout to transition before fitting the view
     setTimeout(() => fitView({ duration: 300 }), 100);
   }, [isFullscreen, fitView]);
 
-  return null; // This component doesn't render anything visible
+  return null;
 };
 
+// ============================================================================
+// Main Builder Page Component
+// ============================================================================
 const BuilderPage = () => {
   const { stackId } = useParams();
   const navigate = useNavigate();
   const [stack, setStack] = useState(null);
   const { enqueueSnackbar } = useSnackbar();
 
+  // --- ReactFlow State ---
   const reactFlowWrapper = useRef(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
 
+  // --- Modals State ---
   const [isStackChatOpen, setIsStackChatOpen] = useState(false);
   const [stackMessages, setStackMessages] = useState([]);
   const [isStackLoading, setIsStackLoading] = useState(false);
@@ -123,62 +138,61 @@ const BuilderPage = () => {
   const [geminiMessages, setGeminiMessages] = useState([]);
   const [isGeminiLoading, setIsGeminiLoading] = useState(false);
 
+  // --- Workflow State ---
   const [isWorkflowRunning, setIsWorkflowRunning] = useState(false);
-
   const [isFlowValid, setIsFlowValid] = useState(false);
   const [isStackChatValid, setIsStackChatValid] = useState(false);
 
+  // --- Fullscreen State ---
   const [isFullscreen, setIsFullscreen] = useState(false);
-
   const handleToggleFullscreen = useCallback(() => {
     setIsFullscreen((prevState) => !prevState);
   }, []);
 
+  // ============================================================================
+  // Flow Validation Logic
+  // ============================================================================
   useEffect(() => {
     const validateFlow = (nodes, edges) => {
-      // 1. Find all the essential nodes
       const userInputNode = nodes.find((node) => node.type === "userInput");
-      const knowledgeBaseNode = nodes.find(
-        (node) => node.type === "knowledgeBase"
-      );
+      const knowledgeBaseNode = nodes.find((node) => node.type === "knowledgeBase");
       const llmNode = nodes.find((node) => node.type === "llmGemini");
       const outputNode = nodes.find((node) => node.type === "output");
 
-      // If any of the four core nodes are missing, the flow is invalid
       if (!userInputNode || !knowledgeBaseNode || !llmNode || !outputNode) {
         return false;
       }
 
-      // 2. Check for the three required connections
       const isInputToLlmConnected = edges.some(
         (edge) => edge.source === userInputNode.id && edge.target === llmNode.id
       );
       const isKbToLlmConnected = edges.some(
-        (edge) =>
-          edge.source === knowledgeBaseNode.id && edge.target === llmNode.id
+        (edge) => edge.source === knowledgeBaseNode.id && edge.target === llmNode.id
       );
       const isLlmToOutputConnected = edges.some(
         (edge) => edge.source === llmNode.id && edge.target === outputNode.id
       );
 
-      // 3. The flow is valid only if all three connections exist
-      return (
-        isInputToLlmConnected && isKbToLlmConnected && isLlmToOutputConnected
-      );
+      return isInputToLlmConnected && isKbToLlmConnected && isLlmToOutputConnected;
     };
 
     setIsFlowValid(validateFlow(nodes, edges));
   }, [nodes, edges]);
 
+  // ============================================================================
+  // Stack Chat Validation Logic
+  // ============================================================================
   useEffect(() => {
     const validateStackChat = (nodes) => {
       const kbNode = nodes.find((node) => node.type === "knowledgeBase");
-      // Check if a KB node exists AND has a doc_id from a successful upload
       return kbNode && !!kbNode.data.doc_id;
     };
     setIsStackChatValid(validateStackChat(nodes));
   }, [nodes]);
 
+  // ============================================================================
+  // Node Helpers (Update + Delete)
+  // ============================================================================
   const updateNodeData = useCallback(
     (nodeId, newData) => {
       setNodes((nds) =>
@@ -194,9 +208,7 @@ const BuilderPage = () => {
 
   const handleDeleteNode = useCallback(
     (nodeId) => {
-      // Remove the node itself
       setNodes((nds) => nds.filter((node) => node.id !== nodeId));
-      // Remove all edges connected to that node
       setEdges((eds) =>
         eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
       );
@@ -204,6 +216,9 @@ const BuilderPage = () => {
     [setNodes, setEdges]
   );
 
+  // ============================================================================
+  // Fetch Stack Data
+  // ============================================================================
   useEffect(() => {
     const fetchStack = async () => {
       try {
@@ -218,7 +233,7 @@ const BuilderPage = () => {
               ...node.data,
               updateNodeData,
               onDeleteNode: handleDeleteNode,
-            }, // <-- Pass delete handler
+            },
             selectable: node.type !== "output",
           }));
           setNodes(nodesWithUpdater);
@@ -232,6 +247,9 @@ const BuilderPage = () => {
     fetchStack();
   }, [stackId, setNodes, setEdges, navigate, updateNodeData, handleDeleteNode]);
 
+  // ============================================================================
+  // ReactFlow Handlers (Connect, Drag, Drop)
+  // ============================================================================
   const onConnect = useCallback(
     (params) => setEdges((eds) => addEdge(params, eds)),
     [setEdges]
@@ -269,70 +287,60 @@ const BuilderPage = () => {
     [reactFlowInstance, updateNodeData, setNodes, handleDeleteNode]
   );
 
+  // ============================================================================
+  // Workflow Execution Handler
+  // ============================================================================
   const handleRunWorkflow = async () => {
     setIsWorkflowRunning(true);
-    // Initial loading state update
     setNodes((nds) =>
-      nds.map((node) => {
-        if (node.type === "output") {
-          return {
-            ...node,
-            data: { ...node.data, output: "Running workflow..." },
-          };
-        }
-        return node;
-      })
+      nds.map((node) =>
+        node.type === "output"
+          ? { ...node, data: { ...node.data, output: "Running workflow..." } }
+          : node
+      )
     );
 
     try {
       const response = await axios.post(
         `${process.env.REACT_APP_API_URL}/api/workflow/run`,
-        {
-          graph: { nodes, edges },
-        }
+        { graph: { nodes, edges } }
       );
       const finalAnswer = response.data.answer;
 
-      // --- THIS IS THE KEY FIX ---
-      // This pattern forces React Flow to remeasure the nodes after the content changes.
       setNodes((nds) => {
-        // Find the updated nodes
-        const updatedNodes = nds.map((node) => {
-          if (node.type === "output") {
-            return { ...node, data: { ...node.data, output: finalAnswer } };
-          }
-          return node;
-        });
-        // Briefly set to empty and then immediately back to the updated state
-        // This triggers a full re-render and resize.
+        const updatedNodes = nds.map((node) =>
+          node.type === "output"
+            ? { ...node, data: { ...node.data, output: finalAnswer } }
+            : node
+        );
         setTimeout(() => setNodes(updatedNodes), 0);
         return [];
       });
-      // --- END OF FIX ---
     } catch (error) {
       console.error("Error running workflow:", error);
-      // Update the output node with an error message
       setNodes((nds) =>
-        nds.map((node) => {
-          if (node.type === "output") {
-            return {
-              ...node,
-              data: { ...node.data, output: "Error: Could not run workflow." },
-            };
-          }
-          return node;
-        })
+        nds.map((node) =>
+          node.type === "output"
+            ? {
+                ...node,
+                data: { ...node.data, output: "Error: Could not run workflow." },
+              }
+            : node
+        )
       );
     } finally {
       setIsWorkflowRunning(false);
     }
   };
 
+  // ============================================================================
+  // Save Stack Handler
+  // ============================================================================
   const handleSave = async () => {
     try {
       const graphToSave = {
         nodes: nodes.map(({ data, ...rest }) => {
-          const { updateNodeData, onDeleteNode, ...dataToSave } = data; // Also remove onDeleteNode
+          const { updateNodeData, onDeleteNode, ...dataToSave } = data;
           return { ...rest, data: dataToSave };
         }),
         edges,
@@ -340,24 +348,21 @@ const BuilderPage = () => {
       await axios.put(`${process.env.REACT_APP_API_URL}/api/stacks/${stackId}`, {
         graph: graphToSave,
       });
-
-      // --- REPLACED alert() WITH TOAST ---
       enqueueSnackbar("Stack saved successfully!", { variant: "success" });
     } catch (error) {
       console.error("Failed to save stack:", error);
-      // --- REPLACED alert() WITH TOAST ---
       enqueueSnackbar("Failed to save stack.", { variant: "error" });
     }
   };
 
+  // ============================================================================
+  // Stack Chat (RAG) Handler
+  // ============================================================================
   const handleSendStackMessage = async (query) => {
     const userMessage = { sender: "user", text: query };
     setStackMessages((prev) => [...prev, userMessage]);
 
-    // Find the Knowledge Base node on the canvas
     const kbNode = nodes.find((node) => node.type === "knowledgeBase");
-
-    // Validate that the node exists and has a document uploaded
     if (!kbNode || !kbNode.data.doc_id) {
       const errorMessage = {
         sender: "ai",
@@ -371,25 +376,24 @@ const BuilderPage = () => {
     setIsStackLoading(true);
 
     try {
-      // Call the new dedicated RAG endpoint
       const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/chat/rag`, {
-        query: query,
-        doc_id: doc_id,
+        query,
+        doc_id,
       });
       const aiMessage = { sender: "ai", text: response.data.answer };
       setStackMessages((prev) => [...prev, aiMessage]);
     } catch (error) {
       console.error("Error in RAG chat:", error);
-      const errorMessage = {
-        sender: "ai",
-        text: "Sorry, something went wrong.",
-      };
+      const errorMessage = { sender: "ai", text: "Sorry, something went wrong." };
       setStackMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsStackLoading(false);
     }
   };
 
+  // ============================================================================
+  // Gemini Chat Handler
+  // ============================================================================
   const handleSendGeminiMessage = async (query) => {
     const userMessage = { sender: "user", text: query };
     setGeminiMessages((prev) => [...prev, userMessage]);
@@ -413,6 +417,9 @@ const BuilderPage = () => {
     }
   };
 
+  // ============================================================================
+  // Render Component
+  // ============================================================================
   if (!stack) return <div>Loading...</div>;
 
   return (
@@ -463,6 +470,7 @@ const BuilderPage = () => {
               <FlowLogic isFullscreen={isFullscreen} />
             </ReactFlow>
 
+            {/* Empty State Overlay */}
             {nodes.length === 0 && (
               <Box
                 sx={{
@@ -472,7 +480,7 @@ const BuilderPage = () => {
                   transform: "translate(-50%, -50%)",
                   textAlign: "center",
                   color: "grey.500",
-                  pointerEvents: "none", // Allows drag-and-drop to pass through
+                  pointerEvents: "none",
                 }}
               >
                 <AdsClickIcon color="primary" sx={{ fontSize: 36, mb: 1 }} />
@@ -484,7 +492,7 @@ const BuilderPage = () => {
               </Box>
             )}
 
-            {/* --- UPDATED FLOATING BUTTONS SECTION --- */}
+            {/* Floating Action Buttons */}
             <Box
               sx={{
                 position: "absolute",
@@ -501,7 +509,6 @@ const BuilderPage = () => {
                 color="primary"
                 aria-label="run"
                 onClick={handleRunWorkflow}
-                // --- UPDATED: The disabled prop now checks for a valid flow ---
                 disabled={isWorkflowRunning || !isFlowValid}
               >
                 {isWorkflowRunning ? (
@@ -529,7 +536,6 @@ const BuilderPage = () => {
                     border: "1px solid #e0e0e0",
                     "&:hover": {
                       backgroundColor: "#f5f5f5",
-
                       boxShadow: "0 4px 8px rgba(0,0,0,0.15)",
                     },
                   }}
@@ -552,11 +558,11 @@ const BuilderPage = () => {
                 </Fab>
               </Box>
             </Box>
-            {/* --- END OF UPDATED SECTION --- */}
           </Box>
         </ReactFlowProvider>
       </Box>
 
+      {/* Chat Modals */}
       <StackChatModal
         open={isStackChatOpen}
         onClose={() => setIsStackChatOpen(false)}

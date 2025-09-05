@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+# DATABASE SERVICE (PostgreSQL)
   db:
     image: postgres:13
     container_name: workflow_db
@@ -13,6 +14,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data/
 
+ # BACKEND SERVICE (FastAPI)
   backend:
     build: ./backend
     container_name: workflow_backend
@@ -23,6 +25,7 @@ services:
     env_file:
       - ./backend/.env
 
+  # FRONTEND SERVICE (React + Nginx)
   frontend:
     build:
       context: ./frontend
@@ -35,5 +38,6 @@ services:
     depends_on:
       - backend
 
+# VOLUMES (Persistent Data Storage)
 volumes:
   postgres_data:
