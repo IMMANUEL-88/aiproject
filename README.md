@@ -43,7 +43,7 @@ First, download the project code from the GitHub repository.
 -   Open your computer's terminal (e.g., Terminal on Mac, PowerShell or Git Bash on Windows).
 -   Run the following command:
     ```bash
-    git clone [https://github.com/IMMANUEL-88/aiproject](https://github.com/IMMANUEL-88/aiproject)
+    git clone https://github.com/IMMANUEL-88/aiproject
     ```
 -   Navigate into the newly created project folder:
     ```bash
@@ -72,6 +72,6 @@ The application needs your personal API keys to connect to the AI and search ser
 This is the final step. With Docker Desktop open and running, go back to your terminal (which should be in the project's root folder) and run this single command:
 
 ```bash
-docker-compose up
+docker-compose up --force-recreate
 ```
 The first build will take a lot of time based on your internet connection. Be Patient :)
