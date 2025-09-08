@@ -58,8 +58,6 @@ const nodeTypes = {
   output: OutputNode,
 };
 
-let id = 1;
-const getId = () => `node_${id++}`;
 
 // ============================================================================
 // Custom Controls (Zoom + Fullscreen Toggle)
